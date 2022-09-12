@@ -1,0 +1,13 @@
+[package]
+name = "aeco-patch-config"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+md5 = "0.7.0"
+rayon = "1.5.3"
+aeco-archive = { git = "https://github.com/ChrisMiuchiz/AECO-Archive.git" }
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.85"
