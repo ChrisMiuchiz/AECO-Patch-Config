@@ -2,10 +2,24 @@ use crate::error::PatchConfigError;
 use crate::fsobject::*;
 use rayon::prelude::*;
 use std::{
+    ffi::OsStr,
     fs::DirEntry,
     io::Error,
     path::{Path, PathBuf},
 };
+
+const UNPACKED_ARCHIVE_EXTENSION: &str = "archive";
+
+fn archive_directory_stem(path: &Path) -> Option<&OsStr> {
+    if path.is_dir() {
+        if let (Some(extension), Some(stem)) = (path.extension(), path.file_stem()) {
+            if extension == UNPACKED_ARCHIVE_EXTENSION {
+                return Some(stem);
+            }
+        }
+    }
+    None
+}
 
 fn process_dir_entry<P>(
     entry: Result<DirEntry, Error>,
@@ -37,7 +51,7 @@ where
         }
     };
 
-    let child = if object_path.is_dir() {
+    let child = if let Some(stem) = archive_directory_stem(&object_path) {
         let mut target_path = PathBuf::new();
         target_path.push(&target_dir);
         target_path.push(&object_name);
@@ -50,7 +64,29 @@ where
             )));
         }
 
-        Some(process_dir(&object_path, &target_path, &object_name)?)
+        Some(FSObject::Archive(process_unpacked_archive(
+            &object_path,
+            &target_path,
+            &stem.to_string_lossy(),
+        )?))
+    } else if object_path.is_dir() {
+        let mut target_path = PathBuf::new();
+        target_path.push(&target_dir);
+        target_path.push(&object_name);
+
+        if let Err(why) = std::fs::create_dir(&target_path) {
+            return Err(PatchConfigError::CreateTargetDirectoryFailed(format!(
+                "Unable to create target subdirectory {}: {}",
+                target_path.to_string_lossy(),
+                why
+            )));
+        }
+
+        Some(FSObject::Directory(process_dir(
+            &object_path,
+            &target_path,
+            &object_name,
+        )?))
     } else if object_path.is_file() {
         let mut target_path = PathBuf::new();
         target_path.push(&target_dir);
@@ -64,11 +100,41 @@ where
     Ok(child)
 }
 
+pub fn process_unpacked_archive<P>(
+    source_dir: P,
+    target_dir: P,
+    object_name: &str,
+) -> Result<Archive, PatchConfigError>
+where
+    P: AsRef<Path>,
+{
+    let mut files = Vec::<File>::new();
+
+    // Unpacked archives are directories that should be represented as archives
+    let dir = process_dir(&source_dir, &target_dir, object_name)?;
+
+    for child in dir.children {
+        if let FSObject::File(file) = child {
+            files.push(file);
+        } else {
+            return Err(PatchConfigError::ArchiveContainsDirectory(format!(
+                "The archive directory {} does not containn exclusively files",
+                source_dir.as_ref().to_string_lossy()
+            )));
+        }
+    }
+
+    Ok(Archive {
+        name: object_name.to_string(),
+        files,
+    })
+}
+
 pub fn process_dir<P>(
     source_dir: P,
     target_dir: P,
     object_name: &str,
-) -> Result<FSObject, PatchConfigError>
+) -> Result<Directory, PatchConfigError>
 where
     P: AsRef<Path>,
 {
@@ -105,10 +171,10 @@ where
     //     }
     // }
 
-    Ok(FSObject::Directory(Directory {
+    Ok(Directory {
         name: object_name.to_string(),
         children,
-    }))
+    })
 }
 
 fn process_new_archive<P>(
@@ -252,7 +318,7 @@ where
                 let mut target_dir = PathBuf::new();
                 target_dir.push(target_parent);
                 target_dir.push(target_stem);
-                target_dir.set_extension("archive");
+                target_dir.set_extension(UNPACKED_ARCHIVE_EXTENSION);
 
                 if let Some(object_name) = object_name.split('.').next() {
                     return process_new_archive(

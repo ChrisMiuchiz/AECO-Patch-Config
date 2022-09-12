@@ -14,6 +14,7 @@ pub enum PatchConfigError {
     MetadataFailed(String),
     MetadataDirectoryFailed(String),
     WriteMetadataFailed(String),
+    ArchiveContainsDirectory(String),
 }
 
 impl ToString for PatchConfigError {
@@ -33,6 +34,7 @@ impl ToString for PatchConfigError {
             PatchConfigError::MetadataFailed(s) => s,
             PatchConfigError::MetadataDirectoryFailed(s) => s,
             PatchConfigError::WriteMetadataFailed(s) => s,
+            PatchConfigError::ArchiveContainsDirectory(s) => s,
         }
         .clone()
     }
