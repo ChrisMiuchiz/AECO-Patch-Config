@@ -1,5 +1,5 @@
 [workspace]
-members = ["aeco-patch-configurator"]
+members = ["aeco-patch-configurator", "aeco-patch-configurator-gui"]
 
 [profile.release]
 strip = true
