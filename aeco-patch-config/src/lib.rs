@@ -5,8 +5,11 @@ use error::PatchConfigError;
 
 pub mod fsobject;
 
-mod process;
-use process::*;
+mod constants;
+mod process_archive;
+mod process_directory;
+mod process_file;
+use process_directory::process_dir;
 
 const PATCH_DIR_NAME: &str = "patch";
 const METADATA_DIR_NAME: &str = "meta";
