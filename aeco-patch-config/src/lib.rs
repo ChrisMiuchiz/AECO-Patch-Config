@@ -4,6 +4,7 @@ pub mod error;
 use error::PatchConfigError;
 
 pub mod fsobject;
+pub mod status;
 
 mod constants;
 mod process_archive;
@@ -14,7 +15,11 @@ use process_directory::process_dir;
 const PATCH_DIR_NAME: &str = "patch";
 const METADATA_DIR_NAME: &str = "meta";
 
-pub fn generate_config<P>(source_dir: P, target_dir: P) -> Result<(), PatchConfigError>
+pub fn generate_config<P>(
+    source_dir: P,
+    target_dir: P,
+    maintenance: bool,
+) -> Result<(), PatchConfigError>
 where
     P: AsRef<Path>,
 {
@@ -55,9 +60,9 @@ where
         )));
     }
 
-    let obj = process_dir(&source_dir.as_ref(), &patch_dir.as_ref(), patch_dir_name)?;
+    let dir_obj = process_dir(&source_dir.as_ref(), &patch_dir.as_ref(), patch_dir_name)?;
 
-    let json = match serde_json::to_string(&obj) {
+    let patch_json = match serde_json::to_string(&dir_obj) {
         Ok(x) => x,
         Err(why) => {
             return Err(PatchConfigError::MetadataFailed(format!(
@@ -84,7 +89,35 @@ where
     patch_data_path.push(&metadata_dir);
     patch_data_path.push("patchlist.json");
 
-    if let Err(why) = std::fs::write(&patch_data_path, &json) {
+    if let Err(why) = std::fs::write(&patch_data_path, &patch_json) {
+        return Err(PatchConfigError::WriteMetadataFailed(format!(
+            "Unable to write metadata file {}: {}",
+            patch_data_path.to_string_lossy(),
+            why
+        )));
+    }
+
+    let server_status = if maintenance {
+        status::ServerStatus::Maintenance
+    } else {
+        status::ServerStatus::Online
+    };
+
+    let status_json = match serde_json::to_string(&server_status) {
+        Ok(x) => x,
+        Err(why) => {
+            return Err(PatchConfigError::MetadataFailed(format!(
+                "Failed to serialize metadata: {}",
+                why
+            )));
+        }
+    };
+
+    let mut status_data_path = PathBuf::new();
+    status_data_path.push(&metadata_dir);
+    status_data_path.push("status.json");
+
+    if let Err(why) = std::fs::write(&status_data_path, &status_json) {
         return Err(PatchConfigError::WriteMetadataFailed(format!(
             "Unable to write metadata file {}: {}",
             patch_data_path.to_string_lossy(),

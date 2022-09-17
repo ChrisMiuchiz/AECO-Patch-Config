@@ -21,6 +21,7 @@ struct PatchConfigApp {
     state_message: String,
     worker_rx: Option<Receiver<MessageToGUI>>,
     file_tree: Vec<String>,
+    maintenance_mode: bool,
 }
 
 impl PatchConfigApp {
@@ -31,6 +32,7 @@ impl PatchConfigApp {
             state_message: String::default(),
             worker_rx: None,
             file_tree: Vec::<String>::new(),
+            maintenance_mode: false,
         }
     }
 
@@ -54,9 +56,11 @@ impl PatchConfigApp {
         let input_dir = input_dir.to_path_buf();
         let output_dir = output_dir.to_path_buf();
 
+        let maintenance_mode = self.maintenance_mode;
+
         // Generate the configuration on a new thread
         thread::spawn(move || {
-            let result = generate_config(input_dir, output_dir);
+            let result = generate_config(input_dir, output_dir, maintenance_mode);
 
             // Send a response to the GUI depending on what the result of the
             // operation was
@@ -190,6 +194,7 @@ impl eframe::App for PatchConfigApp {
                 egui::SidePanel::right("generate-panel")
                     .frame(egui::Frame::none())
                     .show_inside(ui, |ui| {
+                        ui.checkbox(&mut self.maintenance_mode, "Maintenance");
                         ui.centered_and_justified(|ui| {
                             self.generate_button(ui);
                         });
