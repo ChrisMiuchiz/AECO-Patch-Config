@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 use std::{sync::mpsc, thread};
+mod tree;
 
 /// Messages which the worker thread (for generating configs) can send back to
 /// the GUI about the result of the operation.
@@ -19,6 +20,7 @@ struct PatchConfigApp {
     patch_output_folder: String,
     state_message: String,
     worker_rx: Option<Receiver<MessageToGUI>>,
+    file_tree: Vec<String>,
 }
 
 impl PatchConfigApp {
@@ -28,6 +30,7 @@ impl PatchConfigApp {
             patch_output_folder: String::default(),
             state_message: String::default(),
             worker_rx: None,
+            file_tree: Vec::<String>::new(),
         }
     }
 
@@ -143,6 +146,15 @@ impl PatchConfigApp {
         };
 
         self.patch_folder = path_str.to_string();
+
+        match tree::make_tree(path) {
+            Ok(tree_str) => {
+                self.file_tree = tree_str;
+            }
+            Err(_) => {
+                self.set_message("Failed to generate tree for selected input path.");
+            }
+        }
     }
 
     fn browse_patch_output_folder_button(&mut self, ui: &mut egui::Ui) {
@@ -204,9 +216,13 @@ impl eframe::App for PatchConfigApp {
 
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])
-                .show_rows(ui, 14., 50, |ui, row_range| {
+                .show_rows(ui, 14., self.file_tree.len(), |ui, row_range| {
                     for row in row_range {
-                        // ui.label("hello");
+                        let row_text = match self.file_tree.get(row) {
+                            Some(x) => x,
+                            None => "",
+                        };
+                        ui.label(row_text);
                     }
                 });
         });
