@@ -4,6 +4,7 @@ use eframe::epaint::Vec2;
 use rfd::FileDialog;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
+use std::time::Duration;
 use std::{sync::mpsc, thread};
 
 /// Messages which the worker thread (for generating configs) can send back to
@@ -18,7 +19,6 @@ struct PatchConfigApp {
     patch_output_folder: String,
     state_message: String,
     worker_rx: Option<Receiver<MessageToGUI>>,
-    needs_repaint: bool,
 }
 
 impl PatchConfigApp {
@@ -28,7 +28,6 @@ impl PatchConfigApp {
             patch_output_folder: String::default(),
             state_message: String::default(),
             worker_rx: None,
-            needs_repaint: false,
         }
     }
 
@@ -105,7 +104,6 @@ impl PatchConfigApp {
     /// Sets the status message which is displayed to the user
     pub fn set_message(&mut self, message: &str) {
         self.state_message = message.to_string();
-        self.needs_repaint = true;
     }
 
     fn generate_button(&mut self, ui: &mut egui::Ui) {
@@ -172,12 +170,8 @@ impl PatchConfigApp {
 
 impl eframe::App for PatchConfigApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        ctx.request_repaint_after(Duration::from_millis(10));
         self.check_config_worker();
-
-        if self.needs_repaint {
-            ctx.request_repaint();
-            self.needs_repaint = false;
-        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::TopBottomPanel::top("top-panel").show_inside(ui, |ui| {
