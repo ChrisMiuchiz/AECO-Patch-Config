@@ -22,6 +22,7 @@ impl FileTreeNode {
         }
     }
 }
+
 pub struct FileTree {
     name: String,
     nodes: Vec<FileTreeNode>,
