@@ -1,3 +1,6 @@
+// Don't open a command prompt on Windows
+#![windows_subsystem = "windows"]
+
 use aeco_patch_config::{error::PatchConfigError, generate_config};
 use eframe::egui;
 use eframe::epaint::Vec2;
