@@ -145,7 +145,9 @@ impl PatchConfigApp {
             return;
         }
 
-        self.patch_folder_picker = Some(FolderPickWorker::start());
+        if self.patch_folder_picker.is_none() {
+            self.patch_folder_picker = Some(FolderPickWorker::start());
+        }
     }
 
     /// Starts a file picker for the output folder on a new thread
@@ -154,7 +156,9 @@ impl PatchConfigApp {
             return;
         }
 
-        self.patch_output_folder_picker = Some(FolderPickWorker::start());
+        if self.patch_output_folder_picker.is_none() {
+            self.patch_output_folder_picker = Some(FolderPickWorker::start());
+        }
     }
 
     /// Checks to see if there are responses from any file picker workers.
