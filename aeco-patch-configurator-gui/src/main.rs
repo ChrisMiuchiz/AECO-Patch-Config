@@ -4,13 +4,14 @@
 use aeco_patch_config::{error::PatchConfigError, generate_config};
 use eframe::egui;
 use eframe::epaint::Vec2;
-use rfd::FileDialog;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 use std::{sync::mpsc, thread};
 mod file_tree;
 use file_tree::FileTree;
+mod folder_picker;
+use folder_picker::FolderPickWorker;
 
 /// Messages which the worker thread (for generating configs) can send back to
 /// the GUI about the result of the operation.
@@ -21,7 +22,9 @@ enum MessageToGUI {
 
 struct PatchConfigApp {
     patch_folder: String,
+    patch_folder_picker: Option<FolderPickWorker>,
     patch_output_folder: String,
+    patch_output_folder_picker: Option<FolderPickWorker>,
     state_message: String,
     worker_rx: Option<Receiver<MessageToGUI>>,
     file_tree: Option<FileTree>,
@@ -32,7 +35,9 @@ impl PatchConfigApp {
     pub fn new() -> Self {
         Self {
             patch_folder: String::default(),
+            patch_folder_picker: None,
             patch_output_folder: String::default(),
+            patch_output_folder_picker: None,
             state_message: String::default(),
             worker_rx: None,
             file_tree: None,
@@ -134,63 +139,82 @@ impl PatchConfigApp {
         }
     }
 
+    /// Starts a file picker for the input folder on a new thread
     fn browse_patch_folder_button(&mut self, ui: &mut egui::Ui) {
         if !ui.button("Browse").clicked() {
             return;
         }
 
-        let file_dialog = FileDialog::new();
-        let path = match file_dialog.pick_folder() {
-            Some(x) => x,
-            None => return,
-        };
-
-        let path_str = match path.to_str() {
-            Some(x) => x,
-            None => {
-                self.set_message("Selected path could not be converted to a string.");
-                return;
-            }
-        };
-
-        self.patch_folder = path_str.to_string();
-
-        match FileTree::new(path) {
-            Ok(tree) => {
-                self.file_tree = Some(tree);
-            }
-            Err(_) => {
-                self.set_message("Failed to generate tree for selected input path.");
-            }
-        }
+        self.patch_folder_picker = Some(FolderPickWorker::start());
     }
 
+    /// Starts a file picker for the output folder on a new thread
     fn browse_patch_output_folder_button(&mut self, ui: &mut egui::Ui) {
         if !ui.button("Browse").clicked() {
             return;
         }
 
-        let file_dialog = FileDialog::new();
-        let path = match file_dialog.pick_folder() {
-            Some(x) => x,
-            None => return,
-        };
+        self.patch_output_folder_picker = Some(FolderPickWorker::start());
+    }
 
-        let path_str = match path.to_str() {
-            Some(x) => x,
-            None => {
-                self.set_message("Selected path could not be converted to a string.");
-                return;
+    /// Checks to see if there are responses from any file picker workers.
+    /// Updates the paths in the GUI if there are responses.
+    fn update_folders(&mut self) {
+        // Get updated patch folders from any workers
+        let mut updated_patch_folder: Option<PathBuf> = None;
+        let mut updated_patch_output_folder: Option<PathBuf> = None;
+
+        if let Some(worker) = &self.patch_folder_picker {
+            if let Some(optional_path) = &worker.result() {
+                updated_patch_folder = optional_path.clone();
+                self.patch_folder_picker = None;
             }
-        };
+        }
 
-        self.patch_output_folder = path_str.to_string();
+        if let Some(worker) = &self.patch_output_folder_picker {
+            if let Some(optional_path) = &worker.result() {
+                updated_patch_output_folder = optional_path.clone();
+                self.patch_output_folder_picker = None;
+            }
+        }
+
+        // Update displays
+        if let Some(path) = updated_patch_folder {
+            match path.to_str() {
+                Some(path) => {
+                    self.patch_folder = path.to_owned();
+                    match FileTree::new(path) {
+                        Ok(tree) => {
+                            self.file_tree = Some(tree);
+                        }
+                        Err(_) => {
+                            self.set_message("Failed to generate tree for selected input path.");
+                        }
+                    }
+                }
+                None => {
+                    self.set_message("Selected path could not be converted to a string.");
+                }
+            }
+        }
+
+        if let Some(path) = updated_patch_output_folder {
+            match path.to_str() {
+                Some(path) => {
+                    self.patch_output_folder = path.to_owned();
+                }
+                None => {
+                    self.set_message("Selected path could not be converted to a string.");
+                }
+            }
+        }
     }
 }
 
 impl eframe::App for PatchConfigApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_millis(10));
+        self.update_folders();
         self.check_config_worker();
 
         egui::CentralPanel::default().show(ctx, |ui| {
